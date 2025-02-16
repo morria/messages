@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct Message: Identifiable {
     let id = UUID()
@@ -7,11 +8,12 @@ struct Message: Identifiable {
     let timestamp: String
     let snr: Int
     var isTransmitting: Bool
+    var transmissionCancellable: AnyCancellable?
 }
 
 struct ChatView: View {
     @State private var messages: [Message] = [
-        Message(text: "W2ASM CQ", isMe: false, timestamp: "10:00 AM", snr: 25, isTransmitting: false),
+        Message(text: "W2ASM CQ", isMe: false, timestamp: "10:00 AM", snr: 25, isTransmitting: false, transmissionCancellable: nil),
     ]
     @State private var newMessage: String = ""
     @FocusState private var isTextFieldFocused: Bool
@@ -55,11 +57,22 @@ struct ChatView: View {
                     .onChange(of: newMessage) { newValue in
                         newMessage = newValue.uppercased().filter { "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890.,?- " .contains($0) }
                     }
-                Button(action: sendMessage) {
-                    Image(systemName: "paperplane.fill")
-                        .foregroundColor(.blue)
+                Button(action: {
+                    if let lastMessage = messages.last, lastMessage.isTransmitting {
+                        stopTransmission()
+                    } else {
+                        sendMessage()
+                    }
+                }) {
+                    if messages.last?.isTransmitting == true {
+                        Image(systemName: "stop.fill")
+                            .foregroundColor(.red)
+                    } else {
+                        Image(systemName: "paperplane.fill")
+                            .foregroundColor(.blue)
+                    }
                 }
-                .disabled(newMessage.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(newMessage.trimmingCharacters(in: .whitespaces).isEmpty && !(messages.last?.isTransmitting == true))
             }
             .padding()
         }
@@ -72,17 +85,27 @@ struct ChatView: View {
             isMe: true,
             timestamp: "\(DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .short))",
             snr: Int.random(in: 10...40),
-            isTransmitting: true
+            isTransmitting: true,
+            transmissionCancellable: nil
         )
         messages.append(message)
         newMessage = ""
         
-        DispatchQueue.global(qos: .background).async {
-            transmitter.transmit(message: message.text, wpm: rate, tone: tone)
-            DispatchQueue.main.async {
-                if let index = messages.firstIndex(where: { $0.id == message.id }) {
+        let index = messages.count - 1
+        messages[index].transmissionCancellable = transmitter.transmit(message: message.text, wpm: rate, tone: tone)
+            .sink(receiveCompletion: { _ in
+                DispatchQueue.main.async {
                     messages[index].isTransmitting = false
                 }
+            }, receiveValue: {})
+    }
+    
+    private func stopTransmission() {
+        transmitter.stop()
+        if let lastMessage = messages.last, lastMessage.isTransmitting {
+            lastMessage.transmissionCancellable?.cancel()
+            if let index = messages.firstIndex(where: { $0.id == lastMessage.id }) {
+                messages[index].isTransmitting = false
             }
         }
     }
@@ -96,25 +119,26 @@ struct MessageBubble: View {
         HStack {
             if message.isMe { Spacer() }
             VStack(alignment: message.isMe ? .trailing : .leading) {
-                HStack(spacing: 0) {
-                    let words = message.text.split(separator: " ", omittingEmptySubsequences: false)
-                    ForEach(Array(words.enumerated()), id: \..offset) { index, word in
-                        if let match = word.range(of: "[A-Z]{1,2}[0-9][A-Z]{2,3}", options: .regularExpression) {
-                            let callsign = String(word[match])
-                            Link(callsign, destination: URL(string: "https://www.qrz.com/db/\(callsign)")!)
-                        } else {
-                            Text(word)
-                        }
-                        if index < words.count - 1 {
-                            Text(" ")
-                        }
+                if let match = message.text.range(of: "[A-Z]{1,2}[0-9][A-Z]{2,3}", options: .regularExpression) {
+                    let callsign = String(message.text[match])
+                    Link(destination: URL(string: "https://www.qrz.com/db/\(callsign)")!) {
+                        Text(message.text)
+                            .padding()
+                            .background(message.isMe ? (message.isTransmitting ? Color.orange : Color.blue) : Color.gray.opacity(0.2))
+                            .foregroundColor(message.isMe ? .white : .black)
+                            .cornerRadius(15)
+                            .frame(maxWidth: 250, alignment: message.isMe ? .trailing : .leading)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
+                } else {
+                    Text(message.text)
+                        .padding()
+                        .background(message.isMe ? (message.isTransmitting ? Color.orange : Color.blue) : Color.gray.opacity(0.2))
+                        .foregroundColor(message.isMe ? .white : .black)
+                        .cornerRadius(15)
+                        .frame(maxWidth: 250, alignment: message.isMe ? .trailing : .leading)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding()
-                .background(message.isMe ? (message.isTransmitting ? Color.orange : Color.blue) : Color.gray.opacity(0.2))
-                .foregroundColor(message.isMe ? .white : .black)
-                .cornerRadius(15)
-                .frame(maxWidth: 250, alignment: message.isMe ? .trailing : .leading)
                 if showTimestamp {
                     HStack {
                         Text(message.timestamp)

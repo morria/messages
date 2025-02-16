@@ -1,18 +1,15 @@
-//
-//  Transmit.swift
-//  Radio Messager
-//
-//  Created by Andrew Morrison on 2/15/25.
-//
-
 import AVFoundation
 import Foundation
+import Combine
 
 class MorseTransmitter {
     private var audioEngine = AVAudioEngine()
     private var tonePlayer = AVAudioPlayerNode()
     private var sampleRate: Double = 44100.0
     private var bufferSize: AVAudioFrameCount = 44100
+    private var transmissionCancellable: AnyCancellable?
+    private let transmissionQueue = DispatchQueue(label: "MorseTransmissionQueue")
+    private var isTransmitting = false
     
     private let morseCode: [Character: String] = [
         "A": ".-",    "B": "-...",  "C": "-.-.",  "D": "-..",
@@ -27,12 +24,31 @@ class MorseTransmitter {
         " ": " "
     ]
     
-    func transmit(message: String, wpm: Double, tone: Double) {
-        let morseMessage = message.uppercased().compactMap { morseCode[$0] }.joined(separator: " ")
-        playMorse(morseMessage, wpm: wpm, tone: tone)
+    func transmit(message: String, wpm: Double, tone: Double) -> Future<Void, Never> {
+        return Future { promise in
+            self.transmissionQueue.async {
+                guard !self.isTransmitting else {
+                    promise(.success(()))
+                    return
+                }
+                self.isTransmitting = true
+                
+                let morseMessage = message.uppercased().compactMap { self.morseCode[$0] }.joined(separator: " ")
+                self.playMorse(morseMessage, wpm: wpm, tone: tone) {
+                    self.isTransmitting = false
+                    promise(.success(()))
+                }
+            }
+        }
     }
     
-    private func playMorse(_ morse: String, wpm: Double, tone: Double) {
+    func stop() {
+        isTransmitting = false
+        audioEngine.stop()
+        tonePlayer.stop()
+    }
+    
+    private func playMorse(_ morse: String, wpm: Double, tone: Double, completion: @escaping () -> Void) {
         let dotDuration = 1.2 / wpm
         let dashDuration = dotDuration * 3
         let spaceDuration = dotDuration
@@ -46,6 +62,7 @@ class MorseTransmitter {
         do {
             try audioEngine.start()
             for char in morse {
+                guard isTransmitting else { completion(); return }
                 switch char {
                 case ".": playTone(frequency: tone, duration: dotDuration)
                 case "-": playTone(frequency: tone, duration: dashDuration)
@@ -57,6 +74,7 @@ class MorseTransmitter {
         } catch {
             print("Error starting audio engine: \(error.localizedDescription)")
         }
+        completion()
     }
     
     private func playTone(frequency: Double, duration: Double) {
