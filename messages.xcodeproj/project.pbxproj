@@ -37,6 +37,13 @@
 			);
 			target = 728A11262D61541500A9808F /* messages */;
 		};
+		72D7F1AC2D623E8D001AEFA0 /* Exceptions for "messages" folder in "messagesTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Morse/Codec.swift,
+			);
+			target = 728A113D2D61541700A9808F /* messagesTests */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -44,6 +51,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				728A11502D61541700A9808F /* Exceptions for "messages" folder in "messages" target */,
+				72D7F1AC2D623E8D001AEFA0 /* Exceptions for "messages" folder in "messagesTests" target */,
 			);
 			path = messages;
 			sourceTree = "<group>";

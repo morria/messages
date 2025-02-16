@@ -22,7 +22,7 @@ struct ChatView: View {
     @AppStorage("rate") private var rate: Double = 10.0
     @AppStorage("tone") private var tone: Double = 700.0
     
-    let transmitter = MorseTransmitter()
+    let transmitter = Transmit()
     
     var body: some View {
         VStack {

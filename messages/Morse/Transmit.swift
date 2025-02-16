@@ -2,7 +2,7 @@ import AVFoundation
 import Foundation
 import Combine
 
-class MorseTransmitter {
+class Transmit {
     private var audioEngine = AVAudioEngine()
     private var tonePlayer = AVAudioPlayerNode()
     private var sampleRate: Double = 44100.0
@@ -10,19 +10,6 @@ class MorseTransmitter {
     private var transmissionCancellable: AnyCancellable?
     private let transmissionQueue = DispatchQueue(label: "MorseTransmissionQueue")
     private var isTransmitting = false
-    
-    private let morseCode: [Character: String] = [
-        "A": ".-",    "B": "-...",  "C": "-.-.",  "D": "-..",
-        "E": ".",     "F": "..-.",  "G": "--.",   "H": "....",
-        "I": "..",    "J": ".---",  "K": "-.-",   "L": ".-..",
-        "M": "--",    "N": "-.",    "O": "---",   "P": ".--.",
-        "Q": "--.-",  "R": ".-.",   "S": "...",   "T": "-",
-        "U": "..-",   "V": "...-",  "W": ".--",   "X": "-..-",
-        "Y": "-.--",  "Z": "--..",  "1": ".----", "2": "..---",
-        "3": "...--", "4": "....-", "5": ".....", "6": "-....",
-        "7": "--...", "8": "---..", "9": "----.", "0": "-----",
-        " ": " "
-    ]
     
     func transmit(message: String, wpm: Double, tone: Double) -> Future<Void, Never> {
         return Future { promise in
@@ -33,7 +20,7 @@ class MorseTransmitter {
                 }
                 self.isTransmitting = true
                 
-                let morseMessage = message.uppercased().compactMap { self.morseCode[$0] }.joined(separator: " ")
+                let morseMessage = Encode.encode(text: message)
                 self.playMorse(morseMessage, wpm: wpm, tone: tone) {
                     self.isTransmitting = false
                     promise(.success(()))
